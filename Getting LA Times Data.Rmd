@@ -1,0 +1,121 @@
+---
+title: "Getting LA Times Data"
+author: "Megan Valmidiano"
+date: "2024-12-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+url <-('https://www.latimes.com/sitemap')
+webpage <- read_html(url)
+
+year_links <- webpage %>%
+  html_elements(css = '.archive-page-menu-horizontal .link') %>%
+  html_attr('href')
+
+year_links <- year_links[c(1:2)]
+```
+
+```{r}
+month_links <- c()
+for(i in 1:2){
+  
+  # iterate through each link
+  webpage <- read_html(year_links[i])
+  print(i)
+  
+  # grab the href attribute
+  links <- webpage%>%
+    html_nodes(css='.archive-page-menu .link')%>%
+    html_attr('href')
+  
+ # combine the results
+  month_links <- c(month_links, links)
+}
+
+month_links <- month_links[-c(13:21)]
+month_links
+```
+
+```{r}
+day_links <- data.frame()
+
+for(i in 1:NROW(month_links)){
+  
+  # iterate through each link
+  webpage <- read_html(month_links[i])
+  print(i)
+  
+  # grab the href attribute
+  links <- webpage%>%
+    html_nodes(css='.archive-page-menu .link')%>%
+    html_attr('href')
+  
+  # grab the text of the headline
+  text <- webpage%>%
+    html_nodes(css='.archive-page-menu .link')%>%
+    html_text()
+  
+  # put them in a data frame
+  df <- data.frame('links' = links, 'text' = text)
+  
+  # combine the results
+  day_links <- rbind(day_links, df)
+  
+}
+
+day_links
+```
+
+```{r}
+wbank <- day_links %>%
+  filter(str_detect(tolower(text), "west bank"))
+
+palestine <- day_links %>%
+  filter(str_detect(tolower(text), "palestin*"))
+
+gaza <- day_links %>%
+  filter(str_detect(tolower(text), "gaza"))
+
+hamas <- day_links %>%
+  filter(str_detect(tolower(text), "hamas"))
+
+rafah <- day_links %>%
+  filter(str_detect(tolower(text), "rafah"))
+
+alshifa <- day_links %>%
+  filter(str_detect(tolower(text), "al shifa"))
+  
+gaza_articles <- rbind(wbank, palestine, gaza, hamas, rafah, alshifa)
+View(gaza_articles)
+```
+
+```{r}
+latimes_gaza <- data.frame()
+
+for(i in 1:NROW(gaza_articles)){
+  url <- gaza_articles$links[i]
+  
+  webpage <- read_html(url)
+  
+  date <- webpage %>%
+    html_elements(css='.published-date-day') %>%
+    html_text() %>%
+    paste(., collapse= " ") %>%
+    str_replace_all(., "\t", " ") %>%
+    str_replace_all(., "\n", " ")
+  
+  df <- data.frame(url, gaza_articles$text[i], date)
+  
+  latimes_gaza <- rbind(latimes_gaza, df)
+}
+```
+
+```{r}
+write.csv(latimes_gaza, "/Users/mvalmidi/Documents/Data/SURV727/latimes_gaza_articles.csv", row.names=FALSE)
+```

@@ -1,0 +1,161 @@
+---
+title: "Getting MSNBC Data"
+author: "Megan Valmidiano"
+date: "2024-12-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Description of code
+
+This is for my final project, in which I am collecting news articles written since October 2023 relating to Israel and Palestinians in Gaza and the West Bank. This document holds the code I used to scrape relevant articles from MSNBC.
+
+### Set up code
+ 
+These are the packages I library called in order to run this code.
+
+```{r}
+##### Setup Code #####
+library(tidyverse)
+library(rvest)
+library(xml2)
+library(lubridate)
+library(stringr)
+```
+
+### Getting links from the MSNBC Sitemap
+
+I started by getting the links for each month from the MSNBC sitemap.
+
+```{r}
+#I want articles posted Oct 2023 to Nov 30
+#I will need to scrape articles from 2023 & 2024
+
+#First, getting links for each month
+
+url <-('https://www.msnbc.com/archive')
+webpage <- read_html(url)
+
+year_links <- webpage %>%
+  html_elements(css = 'section:nth-child(1) .VerticalPage__list-item a') %>%
+  html_attr('href')
+
+links_year <- as_tibble(year_links)
+
+#pasting the first part of the url to get working links
+year_months <- paste0("https://www.msnbc.com", links_year$value)
+year_months
+
+#getting the links for each month
+month_links <- list()
+
+for(i in 1:2){
+  
+  # iterate through each link
+  webpage <- read_html(year_months[i])
+  print(i)
+  
+  # grab the href attribute
+  links <- webpage%>%
+    html_nodes(css='.YearPage__month')%>%
+    html_attr('href')
+  
+ # combine the results
+  month_links <- c(month_links, links)
+  
+}
+
+#I want to remove items 12-21 in my list becuase these months are before oct 2023 or after nov 2024
+month_links <- month_links[-c(12:21)]
+```
+
+
+I now have links from the sitemap that correspond to each month. Now I will run a loop to get links for each day.
+
+```{r}
+day_links <- data.frame()
+
+for(i in 1:14){
+  
+  link <- paste0("https://msnbc.com", month_links[i])
+  
+  # iterate through each link
+  webpage <- read_html(link)
+  print(i)
+  
+  # grab the href attribute
+  links <- webpage%>%
+    html_nodes(css='.MonthPage a')%>%
+    html_attr('href')
+  
+  # grab the text of the headline
+  text <- webpage%>%
+    html_nodes(css='.MonthPage a')%>%
+    html_text()
+  
+  # put them in a data frame
+  df <- data.frame('links' = links, 'text' = text)
+  
+  # combine the results
+  day_links <- rbind(day_links, df)
+  
+}
+
+day_links
+```
+
+### Getting the article information
+
+Now that I have links and headlines, I am going to pull the information I want from these articles. First, I am going to filter through the articles. Only articles with my keywords in their headlines are going to remain the data I use for my project.
+
+```{r}
+wbank <- day_links %>%
+  filter(str_detect(tolower(text), "west bank"))
+
+palestine <- day_links %>%
+  filter(str_detect(tolower(text), "palestin*"))
+
+gaza <- day_links %>%
+  filter(str_detect(tolower(text), "gaza"))
+
+hamas <- day_links %>%
+  filter(str_detect(tolower(text), "hamas"))
+
+rafah <- day_links %>%
+  filter(str_detect(tolower(text), "rafah"))
+
+alshifa <- day_links %>%
+  filter(str_detect(tolower(text), "al shifa"))
+  
+gaza_articles <- rbind(wbank, palestine, gaza, hamas, rafah, alshifa)
+View(gaza_articles)
+```
+
+Now, I am pulling the body text and dates from the filtered articles.
+
+```{r}
+msnbc_gaza <- data.frame()
+
+for(i in 1:NROW(gaza_articles)){
+  url <- gaza_articles$links[i]
+  webpage <- read_html(url)
+  
+  date <- webpage %>%
+    html_elements(css='.z-1') %>%
+    html_text() %>%
+    paste(., collapse= " ") %>%
+    str_replace_all(., "\t", " ") %>%
+    str_replace_all(., "\n", " ")
+  
+  msnbc_gaza <- rbind(msnbc_gaza, data.frame(url, gaza_articles$text[i], date))
+}
+```
+
+Finally, I am exporting my data frame as a .csv file. 
+
+```{r}
+write.csv(msnbc_gaza, "/Users/mvalmidi/Documents/Data/SURV727/msnbc_gaza_articles.csv", row.names=FALSE)
+```

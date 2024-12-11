@@ -1,0 +1,174 @@
+---
+title: "Getting NY Post Data"
+author: "Megan Valmidiano"
+date: "2024-12-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Description of code
+
+This is for my final project, in which I am collecting news articles written since October 2023 relating to Israel and Palestinians in Gaza and the West Bank. This document holds the code I used to scrape relevant articles from the New York Post
+
+### Set up code
+ 
+These are the packages I library called in order to run this code.
+
+```{r}
+##### Setup Code #####
+library(tidyverse)
+library(rvest)
+library(xml2)
+library(lubridate)
+library(stringr)
+```
+
+### Getting links from the NY Post Sitemap
+
+I started by getting the links for each month from the sitemap.
+
+```{r}
+url<-'https://nypost.com/sitemap/'
+webpage <- read_html(url)
+
+month_links <- webpage%>%
+  html_elements(css='#main a')%>%
+  html_attr('href')
+
+month_links
+#every month since 1999
+
+#getting the links for each day
+day_links <- data.frame()
+
+for(i in 299:313){
+  
+  # iterate through each link
+  webpage <- read_html(month_links[i])
+  print(i)
+  
+  # grab the href attribute
+  links <- webpage%>%
+    html_nodes(css='.section__content a')%>%
+    html_attr('href')
+  
+  # grab the text of the headline
+  text <- webpage%>%
+    html_nodes(css='.section__content a')%>%
+    html_text()
+  
+  # put them in a data frame
+  df <- data.frame('links' = links, 'text' = text)
+  
+  # combine the results
+  day_links <- rbind(day_links, df)
+  
+}
+
+day_links
+
+#getting article links
+nyp_links <- data.frame()
+
+for(i in 1:NROW(day_links)){
+  
+  # iterate through each link
+  webpage <- read_html(day_links$links[i])
+  print(i)
+  
+  # grab the href attribute
+  links <- webpage%>%
+    html_nodes(css='.headline--archive a')%>%
+    html_attr('href')
+  
+  # grab the text of the headline
+  text <- webpage%>%
+    html_nodes(css='.headline--archive a')%>%
+    html_text()
+  
+  # put them in a data frame
+  df <- data.frame('links' = links, 'text' = text)
+  
+  # combine the results
+  nyp_links <- rbind(nyp_links, df)
+  
+}
+
+```
+
+
+I now have links from the sitemap that correspond to each day.
+
+### Getting the article information
+
+Now that I have links and headlines, I am going to pull the information I want from these articles. First, I am going to filter through the articles. Only articles with my keywords in their headlines are going to remain the data I use for my project.
+
+```{r}
+wbank <- nyp_links %>%
+  filter(str_detect(tolower(text), "west bank"))
+
+palestine <- nyp_links %>%
+  filter(str_detect(tolower(text), "palestin*"))
+
+gaza <- nyp_links %>%
+  filter(str_detect(tolower(text), "gaza"))
+
+hamas <- nyp_links %>%
+  filter(str_detect(tolower(text), "hamas"))
+
+rafah <- nyp_links %>%
+  filter(str_detect(tolower(text), "rafah"))
+
+alshifa <- nyp_links %>%
+  filter(str_detect(tolower(text), "al shifa"))
+  
+gaza_articles <- rbind(wbank, palestine, gaza, hamas, rafah, alshifa)
+
+gaza_artcles <- gaza_articles %>%
+  filter(!(str_detect(links, "video")))
+
+View(gaza_artcles)
+```
+
+Now, I am pulling the body text and dates from the filtered articles.
+
+```{r}
+nyp_gaza <- data.frame()
+
+for(i in 1:NROW(gaza_artcles)){
+  url <- gaza_artcles$links[i]
+  webpage <- read_html(url)
+  
+  date <- webpage %>%
+    html_elements(css='.date--updated__item span+ span') %>%
+    html_text() %>%
+    paste(., collapse= " ") %>%
+    str_replace_all(., "\t", " ") %>%
+    str_replace_all(., "\n", " ")
+  
+  headline <- gaza_artcles$text[i] %>%
+    str_replace_all(., "\t", " ") %>%
+    str_replace_all(., "\n", " ") %>%
+    paste(., collapse= " ")
+  
+  nyp_gaza <- rbind(nyp_gaza, data.frame(url, headline, date))
+  
+  print(i)
+}
+
+nyp_gaza <- nyp_gaza %>%
+  mutate(
+    date_clean = str_extract(date, "^[A-Za-z]+\\.\\s\\d{1,2},\\s\\d{4}"),
+    date = as.Date(date_clean, format = "%b. %d, %Y")
+  )
+```
+
+Finally, I am exporting my data frame as a .csv file. 
+
+```{r}
+
+write.csv(nyp_gaza, "/Users/mvalmidi/Documents/Data/SURV727/nyp_gaza_articles.csv", row.names=FALSE)
+```

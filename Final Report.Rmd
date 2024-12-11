@@ -1,0 +1,185 @@
+---
+title: "Gaza in the Media Following October 2023"
+author: "Megan Valmidiano"
+date: "2024-12-10"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Introduction**
+
+On October 7, 2023, Hamas conducted an attack on Israeli land, killing over 1,200 people and capturing hundreds of hostages. Almost immediately following the attack, Israel began counteroffensive operations in Gaza. This crisis has had sustained coverage in the American news media, exposing the public to information regarding the war, its large civilian toll, and the American government's diplomatic response. 
+
+It is important to understand what exactly has been covered since October 7, 2023, as news media plays a large role in agenda setting and attitude framing. How has the news media's framing of the crisis evolved since Oct 2023? Attempting to answer this question allows us to begin to understand what the public is being exposed to, and possible affective responses to this exposure.
+
+**Data Collection**
+
+In this project, online news publications were used to measure Americans' information exposure. This is a sufficient way to measure the news Americans are consuming, as over half (58%) of Americans primarily get their news on their digital devices according to Pew Research. Pew Research also shows that almost two thirds of Americans at least sometimes get their news through search engines or online news sites.
+
+Four online news sources were identified for this project: MSNBC, LA Times, The Hill, and The New York Post. These sites each see tens millions of individual visitors each month, meaning their coverage has a wide-reaching inmpact. Additionally, these sources represent political ideologies ranging across the left-right spectrum, which mitigates some potential ideological bias in coverage.
+
+After identifying these sources, headlines published between October 1, 2023 and November 30, 2024 were collected via web scraping in R. After the headlines were collected, they were filtered to only include key words relating to Palestine and the Palestinian cause. None of the key words related directly Israel in order to avoid duplications in the data, and because Israel in involved in many topics across the world. Articles containing the word "Israel", for example, may have nothing to do with Palestine. However, due to the nature of Palestine's status as an occupied territory, and because the war in Gaza has overtaken every aspect of life for Gazans, every headline containing Palestinian-related key words will relate back to the Israel-Gaza crisis.
+
+After the data collecting and filtering process, 3,984 articles remained in the data set. October and November 2023, immediately following the October 7 attacks and Israel's decision to go to war in Gaza saw the highest amount of coverage. However, coverage has remained relatively high since then.
+
+```{r include=FALSE}
+library(tidyverse)
+library(tidyverse)
+library(lubridate)
+library(tidytext)
+library(tm)
+```
+
+```{r include=FALSE}
+nyp_gaza <- read_csv(file.path('~', 'Documents', 'Data', 'SURV727', 'nyp_gaza_articlesFINAL.csv'))
+latimes_gaza <- read_csv(file.path('~', 'Documents', 'Data', 'SURV727', 'latimes_gaza_articlesFINAL.csv'))
+msnbc_gaza <- read_csv(file.path('~', 'Documents', 'Data', 'SURV727', 'msnbc_gaza_articlesFINAL.csv'))
+hill_gaza <- read_csv(file.path('~', 'Documents', 'Data', 'SURV727', 'thehill_gaza_articlesFINAL.csv'))
+
+nyp_gaza <- nyp_gaza[c("url", "headline", "date")]
+
+combined_articles <- rbind(nyp_gaza, msnbc_gaza, latimes_gaza, hill_gaza)
+```
+
+```{r include=FALSE}
+combined_articles <- rbind(nyp_gaza, msnbc_gaza, latimes_gaza, hill_gaza)
+
+headline_counts <- combined_articles %>%
+  group_by(date) %>%
+  summarise(Count = n())
+
+summary(headline_counts$Count)
+summary(headline_counts$date)
+```
+
+**Analysis & Discussion**
+
+This data was further analyzed in two parts. First, I looked at a general timeline of coverage, as shown in Figure 1. At most, 42 articles were posted in one day regarding the Israel-Gaza crisis. In the 426 days that the time range of this data covers, only 13 days went by where none of the sources in the data covered Israel-Gaza. There was not a single week that went by with zero coverage.
+
+```{r warning=FALSE, include=FALSE}
+events <- data.frame(
+  Date = as.Date(c("2023-10-07", "2023-11-01", "2024-04-29", "2024-10-17", "2023-11-28")),
+  Event = c("Oct 7", "Refugees Enter Egypt", 
+            "Rafah Offensive", "Hamas Leader Killed", "Short Ceasefire"))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(headline_counts, aes(x = date, y = Count)) +
+  geom_line(color = "orange", size = .5) +
+  geom_point(data = events, aes(x = Date, y = headline_counts$Count[match(Date, headline_counts$date)]), 
+             color = "black", size = 2) +   # Add points for events
+  geom_text(data = events, aes(x = Date, y = headline_counts$Count[match(Date, headline_counts$date)] + 2, label = Event), 
+            color = "black", size = 3.3, vjust = 0.7) +
+  labs(
+    title = "Figure 1: Articles per Day", x = "Dates (Oct '23 - Nov '24)", y = "Number of Headlines") +
+  theme_minimal()
+```
+
+The sustained coverage since October 7 shows that the Israel-Gaza issue has been adopted in the news media agenda. This is an issue that the news media has chosen to be a priority, and the public is nearly constantly being exposed to news about this conflict. 
+
+Next, text analysis was conducted to learn about the attitude objects being referenced in coverage of the Israel-Gaza crisis. Before conducting the text analysis, the data was separated into 4 time periods, so that roughly 25% of articles fall into each time period. Time period 1 is October 2023 - December 2023. This represents the coverage of the October 7 attack and the immediate aftermath. The second time period is January 2024 - April 2024. This is a period of escalation in the conflict, as well as when mass demonstrations regarding the Israel-Palestine crisis were taking place across the United States. Time period 3 is May 2024 - August 2024. This time period begins with Israel invading Rafah in Southern Gaza, then sees relatively low coverage of the crisis. The last and most recent time period is September 2024 - November 2024. This is another time period of relatively low coverage, but major events, including the death of Hamas's leader, are still being covered.
+
+In order to conduct the text analysis, headlines were cleaned and tokenized. Then, stop words were removed. The stop words used included words commonly used to reference the crisis (Israel, Gaza, and war, for example). The reasoning behind this is that these words are used to alert the audience to the general topic of the article. To make a comparison, it would be like including the word "Biden" when trying to analyze coverage of the executive branch. The use of these words is so common within this topic that including them in the analysis overshadows any actual changes happening.
+
+```{r include=FALSE}
+df <- combined_articles %>%
+  mutate(period = case_when(
+    date >= as.Date("2023-10-01") & date <= as.Date("2023-12-31") ~ "Oct23_Dec23",
+    date >= as.Date("2024-01-01") & date <= as.Date("2024-04-30") ~ "Jan24_Apr24",
+    date >= as.Date("2024-05-1") & date <= as.Date("2024-08-31") ~ "May24_Aug24",
+    date >= as.Date("2024-09-1") & date <= as.Date("2024-11-30") ~ "Sep24_Nov24",
+    TRUE ~ NA_character_
+  ))
+
+custom_stopwords <- data.frame(word = c("israel", "hamas", "gaza", "amid", "top", "killed", "conflict",
+                                        "pro", "war", "palestine", "palestinians", "fire", "hostage"), 
+                               lexicon = "custom")
+all_stopwords <- stop_words %>%
+  bind_rows(custom_stopwords)
+
+tokens <- df %>%
+  unnest_tokens(word, headline) %>% 
+  anti_join(all_stopwords, by = "word")
+
+token_counts <- tokens %>%
+  group_by(period, word) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  arrange(period, desc(Count))
+
+top_tokens <- token_counts %>%
+  group_by(period) %>%
+  slice_max(order_by = Count, n = 10) %>%
+  drop_na()
+```
+
+Figures 2-5 show the top tokens for each time period. The words "Israeli", "Palestinian", and "Hostages" remain top words over the entire date range. However, we also see the transformation from the Israel-Gaza issue from a foreign event of interest into a domestic policy. The first two time periods see tokens relating to ceasefire calls, and individual events that happen during the conflict, such as aid passing through the Rafah crossing or hospital bombings. As time progresses, we see tokens relating to American domestic politics, such as the Trump-Harris election.
+
+```{r echo=FALSE, fig.height=2.4, fig.width=3.6, message=FALSE, warning=FALSE}
+top_tokens <- top_tokens %>%
+  mutate(color = case_when(
+    word %in% c("palestinian", "israeli", "hostages", "biden") ~ "gray",  # Specific words in gray
+    TRUE ~ "orange"  # All other words in orange
+  ))
+
+q1_tokens <- top_tokens %>% 
+  filter(period == "Oct23_Dec23")
+q2_tokens <- top_tokens %>% 
+  filter(period == "Jan24_Apr24")
+q3_tokens <- top_tokens %>% 
+  filter(period == "May24_Aug24")
+q4_tokens <- top_tokens %>% 
+  filter(period == "Sep24_Nov24")
+
+# Plot for Q1
+ggplot(q1_tokens) +
+  geom_col(show.legend = FALSE, aes(x=reorder(word, Count), y=Count, fill = color)) +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(
+    title = "Figure 2: Oct '23 - Dec '23",
+    x = NULL, y = "Count") +
+  scale_fill_manual(values = c("gray", "orange")) +
+  theme_minimal()
+```
+
+Figure two starts off with the top words "Palestinian", "Israeli", "Hostages", and "Biden" in gray. These words remain top words until present day. However, their relative occurrence drops as time moves on, as shown in the following figures.
+
+```{r echo=FALSE, fig.height=2.4, fig.width=3.6, message=FALSE, warning=FALSE}
+# Plot for Q2
+ggplot(q2_tokens) +
+  geom_col(show.legend = FALSE, aes(x=reorder(word, Count), y=Count, fill = color)) +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(
+    title = "Figure 3: Jan '24 - Apr '24",
+    x = NULL, y = "Count") +
+  scale_fill_manual(values = c("gray", "orange")) +
+  theme_minimal()
+
+# Plot for Q3
+ggplot(q3_tokens) +
+  geom_col(show.legend = FALSE, aes(x=reorder(word, Count), y=Count, fill = color)) +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(
+    title = "Figure 4: May '24 - Aug '24",
+    x = NULL, y = "Count") +
+  scale_fill_manual(values = c("gray", "orange")) +
+  theme_minimal()
+
+# Plot for Q4
+ggplot(q4_tokens) +
+  geom_col(show.legend = FALSE, aes(x=reorder(word, Count), y=Count, fill = color)) +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(
+    title = "Figure 5: Aug '24 - Nov '24",
+    x = NULL, y = "Count") +
+  scale_fill_manual(values = c("gray", "orange")) +
+  theme_minimal()
+```
+
+The github repository containing the data and code for analysis can be found here: 

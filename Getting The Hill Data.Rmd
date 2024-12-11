@@ -1,0 +1,117 @@
+---
+title: "Getting The Hill Data"
+author: "Megan Valmidiano"
+date: "2024-12-11"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+##### Setup Code #####
+library(tidyverse)
+library(rvest)
+library(xml2)
+library(lubridate)
+library(stringr)
+
+##### Getting The Hill Links #####
+
+#First, getting links for each month
+url <-('https://thehill.com/sitemap/')
+webpage <- read_html(url)
+
+month_links <- webpage %>%
+  html_elements(css = '.sitemap-column-item') %>%
+  html_attr('href')
+
+month_links
+
+#I want to remove the months that aren't relevant to my proj
+month_links <- month_links[-c(12:21, 25:281)]
+month_links
+
+#now getting links for each day
+day_links <- c()
+
+for(i in 1:NROW(month_links)){
+  
+  # iterate through each link
+  webpage <- read_html(month_links[i])
+  print(i)
+  
+  # grab the href attribute
+  links <- webpage%>%
+    html_nodes(css='.sitemap-column-item')%>%
+    html_attr('href')
+
+  # combine the results
+  day_links <- c(day_links, links)
+  
+}
+
+day_links
+
+#get headlines
+
+articles <- data.frame()
+
+for(i in 1:NROW(day_links)){
+  
+  # iterate through each link
+  webpage <- read_html(day_links[i])
+  print(i)
+  
+  # grab the href attribute
+  links <- webpage%>%
+    html_nodes(css='.sitemap-column-item')%>%
+    html_attr('href')
+  
+  # grab the text of the headline
+  text <- webpage%>%
+    html_nodes(css='.sitemap-column-item')%>%
+    html_text() %>%
+    str_replace_all(.,"\t", " ") %>%
+    str_replace(., "\n", " ")
+  
+  #getting date from urls
+  date <- day_links[i] %>%
+    str_replace_all(., "https://thehill.com/sitemap/", "")
+  
+  # put them in a data frame
+  df <- data.frame('links' = links, 'text' = text, 'date' = date)
+  
+  # combine the results
+  articles <- rbind(articles, df)
+  
+  Sys.sleep(1)
+}
+
+articles
+
+#filter through headlines
+
+wbank <- articles %>%
+  filter(str_detect(tolower(text), "west bank"))
+
+palestine <- articles %>%
+  filter(str_detect(tolower(text), "palestin*"))
+
+gaza <- articles %>%
+  filter(str_detect(tolower(text), "gaza"))
+
+hamas <- articles %>%
+  filter(str_detect(tolower(text), "hamas"))
+
+rafah <- articles %>%
+  filter(str_detect(tolower(text), "rafah"))
+
+alshifa <- articles %>%
+  filter(str_detect(tolower(text), "al shifa"))
+
+gaza_articles <- rbind(wbank, palestine, gaza, hamas, rafah, alshifa)
+View(gaza_articles)
+
+write.csv(gaza_articles, "/Users/mvalmidi/Documents/Data/SURV727/thehill_gaza_articles.csv", row.names=FALSE)
+```
